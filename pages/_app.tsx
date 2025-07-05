@@ -1,7 +1,7 @@
 // pages/_app.tsx
 import "../styles/globals.css"; // Pastikan ini ada jika Anda punya styling global
 import type { AppProps } from "next/app";
-import { useRouter } from "next/router";
+import { useRouter } from "next/router"; // Using next/router for App Router compatibility
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient"; // Import supabase client Anda
 
@@ -40,7 +40,8 @@ function MyApp({ Component, pageProps }: AppProps) {
     // Listener untuk perubahan status autentikasi (login/logout)
     // Ini memastikan redirect terjadi secara real-time
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        // Removed '_' from '_event' to use it if needed, though still unused in this context.
         checkUserSession(); // Panggil lagi saat status auth berubah
       }
     );

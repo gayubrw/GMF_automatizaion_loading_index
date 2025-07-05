@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient"; // <<< PENTING: Import supabaseClient
 import { useRouter } from "next/router"; // <<< PENTING: Import useRouter
+import { User } from "@supabase/supabase-js"; // Import User type for better type safety
 
 interface FlightRecord {
   id: number;
@@ -12,7 +13,7 @@ interface FlightRecord {
 }
 
 export default function HomePage() {
-  const [user, setUser] = useState<any | null>(null); // State user dari Supabase
+  const [user, setUser] = useState<User | null>(null); // State user dari Supabase, using User type
   const [authLoading, setAuthLoading] = useState(true); // State untuk menunjukkan loading autentikasi
   const router = useRouter(); // Inisialisasi useRouter
   const [flightRecords, setFlightRecords] = useState<FlightRecord[]>([]);

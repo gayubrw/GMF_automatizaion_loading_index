@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
+import Link from "next/link"; // Link is used here, so no unused warning
 import { supabase } from "../lib/supabaseClient"; // Import client
 
 export default function LoginPage() {
