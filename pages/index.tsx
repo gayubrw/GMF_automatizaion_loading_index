@@ -1,9 +1,5 @@
-// pages/index.tsx
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "../lib/supabaseClient"; // <<< PENTING: Import supabaseClient
-import { useRouter } from "next/router"; // <<< PENTING: Import useRouter
-import { User } from "@supabase/supabase-js"; // Import User type for better type safety
 
 interface FlightRecord {
   id: number;
@@ -13,79 +9,31 @@ interface FlightRecord {
 }
 
 export default function HomePage() {
-  const [user, setUser] = useState<User | null>(null); // State user dari Supabase, using User type
-  const [authLoading, setAuthLoading] = useState(true); // State untuk menunjukkan loading autentikasi
-  const router = useRouter(); // Inisialisasi useRouter
   const [flightRecords, setFlightRecords] = useState<FlightRecord[]>([]);
-  const [loading, setLoading] = useState(true); // State untuk loading data laporan
-  const [error, setError] = useState<string | null>(null); // State untuk error saat fetch data
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkSession = async () => {
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser(); // Dapatkan user dari sesi Supabase
-      setUser(currentUser); // Set user state
-      setAuthLoading(false); // Selesai loading autentikasi
-    };
-    checkSession();
-
-    // Listener untuk perubahan status autentikasi (misal: setelah logout)
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user || null); // Update user state
-      }
-    );
-    // Cleanup listener saat komponen di-unmount
-    return () => {
-      if (authListener && authListener.subscription) {
-        authListener.subscription.unsubscribe();
-      }
-    };
-  }, []); // Dependensi kosong agar hanya berjalan sekali saat mount
-
-  useEffect(() => {
-    // Hanya fetch data laporan jika status autentikasi sudah diketahui
-    if (!authLoading) {
-      // Pastikan authLoading sudah selesai
-      async function fetchFlightRecords() {
-        try {
-          const res = await fetch("/api/flight-records");
-          if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-          }
-          const data: FlightRecord[] = await res.json();
-          setFlightRecords(data);
-        } catch (err: unknown) {
-          if (err instanceof Error) {
-            setError(err.message);
-          } else {
-            setError("An unknown error occurred.");
-          }
-        } finally {
-          setLoading(false);
+    async function fetchFlightRecords() {
+      try {
+        const res = await fetch("/api/flight-records");
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
         }
+        const data: FlightRecord[] = await res.json();
+        setFlightRecords(data);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("An unknown error occurred.");
+        }
+      } finally {
+        setLoading(false);
       }
-      fetchFlightRecords();
     }
-  }, [authLoading]); // Dependensi authLoading agar fetch data setelah auth selesai
-
-  // --- Handler untuk tombol Logout (BARU) ---
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      alert("Error logging out: " + error.message);
-    } else {
-      alert("Logged out successfully!");
-      router.push("/login"); // Redirect ke halaman login setelah logout
-    }
-  };
-
-  // Tampilkan loading state jika autentikasi atau data sedang dimuat
-  if (authLoading || loading)
-    return <div className="container">Loading user session...</div>;
-  // Tampilkan pesan error jika ada masalah saat fetch data
-  if (error) return <div className="container">Error: {error}</div>;
+    fetchFlightRecords();
+  }, []);
 
   return (
     <div className="container">
@@ -98,33 +46,17 @@ export default function HomePage() {
         }}
       >
         <h1>Flight Weight & Balance Reports</h1>
-        <div>
-          {user && ( // Tampilkan email user jika ada (setelah login)
-            <span
-              style={{ marginRight: "15px", fontSize: "0.9rem", color: "#555" }}
-            >
-              Logged in as: {user.email}
-            </span>
-          )}
-          {user && ( // Tombol "Add New Report" selalu terlihat jika user sudah login
-            <Link href="/add-report" passHref>
-              <button style={{ marginRight: "10px" }}>+ Add New Report</button>
-            </Link>
-          )}
-          {user && ( // <<< PENTING: Tombol logout (BARU)
-            <button
-              onClick={handleLogout}
-              style={{ backgroundColor: "#6c757d" }}
-            >
-              Logout
-            </button>
-          )}
-        </div>
+        <Link href="/add-report" passHref>
+          <button>+ Add New Report</button>
+        </Link>
       </div>
       <p>Select a report to view its details:</p>
 
-      {/* Tampilkan pesan jika tidak ada laporan */}
-      {flightRecords.length === 0 ? (
+      {loading ? (
+        <p>Loading reports...</p>
+      ) : error ? (
+        <p>Error: {error}</p>
+      ) : flightRecords.length === 0 ? (
         <p>No reports found. Please add data to your database.</p>
       ) : (
         <div
