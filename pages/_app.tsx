@@ -39,12 +39,10 @@ function MyApp({ Component, pageProps }: AppProps) {
 
     // Listener untuk perubahan status autentikasi (login/logout)
     // Ini memastikan redirect terjadi secara real-time
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Removed '_' from '_event' to use it if needed, though still unused in this context.
-        checkUserSession(); // Panggil lagi saat status auth berubah
-      }
-    );
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event) => {
+      // Removed '_' from '_event' to use it if needed, though still unused in this context.
+      checkUserSession(); // Panggil lagi saat status auth berubah
+    });
 
     // Cleanup listener saat komponen di-unmount
     return () => {
