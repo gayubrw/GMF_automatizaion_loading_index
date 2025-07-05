@@ -1,7 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { query } from "../../../lib/db";
 
-// Interfaces Utama
+// --- Interfaces ---
+
+// Interface untuk Galley Detail
 interface GalleyDetail {
   id: number;
   galley_no: string;
@@ -12,6 +14,7 @@ interface GalleyDetail {
   international_index: number;
 }
 
+// Interface untuk Crew Detail
 interface CrewDetail {
   id: number;
   description: string;
@@ -21,22 +24,24 @@ interface CrewDetail {
   index: number;
 }
 
+// Interface untuk Flight Record yang lengkap, seperti yang akan dikirim ke frontend
 interface FlightRecordDetail {
   id: number;
   loading_index_doc: string;
   weight_report_doc: string;
-  report_date: string;
-  aircraft_reg?: string;
+  report_date: string; // Tanggal dari DB bisa jadi string (e.g., "YYYY-MM-DD")
+  aircraft_reg?: string; // Opsional
   empty_weight: number;
   empty_weight_index: number;
   dow_domestic: number;
   doi_domestic: number;
   dow_international: number;
   doi_international: number;
-  galley_details: GalleyDetail[];
-  crew_details: CrewDetail[];
+  galley_details: GalleyDetail[]; // Array detail galley
+  crew_details: CrewDetail[]; // Array detail crew
 }
 
+// Interface untuk payload update dari frontend (PUT request)
 interface UpdateFlightRecordPayload {
   loading_index_doc: string;
   weight_report_doc: string;
@@ -50,51 +55,59 @@ interface UpdateFlightRecordPayload {
   doi_international: number;
 }
 
+// Interface untuk data mentah yang diterima dari database (sebelum parsing)
+// PostgreSQL driver sering mengembalikan DECIMAL/NUMERIC sebagai string
+interface RawFlightRecordFromDb {
+  id: number;
+  loading_index_doc: string;
+  weight_report_doc: string;
+  report_date: string;
+  aircraft_reg?: string;
+  empty_weight: string | number;
+  empty_weight_index: string | number;
+  dow_domestic: string | number;
+  doi_domestic: string | number;
+  dow_international: string | number;
+  doi_international: string | number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// --- Handler API Utama ---
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<FlightRecordDetail | { message: string; error?: string }>
 ) {
-  const { id } = req.query;
+  const { id } = req.query; // Dapatkan ID dari URL query parameter
 
-  // Definisikan RawFlightRecord di luar agar bisa digunakan di mana saja
-  // Ini untuk menangani nilai numerik yang mungkin datang sebagai string dari DB
-  interface RawFlightRecordFromDb {
-    id: number;
-    loading_index_doc: string;
-    weight_report_doc: string;
-    report_date: string;
-    aircraft_reg?: string;
-    empty_weight: string | number;
-    empty_weight_index: string | number;
-    dow_domestic: string | number;
-    doi_domestic: string | number;
-    dow_international: string | number;
-    doi_international: string | number;
-    // Tambahkan kolom lain dari DB jika ada, seperti created_at, updated_at
-    created_at?: string;
-    updated_at?: string;
+  // Validasi ID (pastikan ada dan bertipe string)
+  if (!id || typeof id !== "string") {
+    return res
+      .status(400)
+      .json({ message: "Invalid or missing Flight Record ID." });
   }
 
+  // --- GET (Mengambil detail laporan tunggal) ---
   if (req.method === "GET") {
     try {
-      // Ambil data mentah menggunakan RawFlightRecordFromDb
+      // Ambil data mentah laporan utama dari database
       const [rawFlightRecord] = await query<RawFlightRecordFromDb>(
         "SELECT * FROM flight_records WHERE id = $1",
         [id]
       );
 
       if (!rawFlightRecord) {
-        return res.status(404).json({ message: "Flight Record not found" });
+        return res.status(404).json({ message: "Flight Record not found." });
       }
 
       // Parse data mentah ke tipe FlightRecordDetail
+      // Menggunakan 'as string' untuk meyakinkan TypeScript bahwa itu bisa diparsing
       const flightRecord: FlightRecordDetail = {
         id: rawFlightRecord.id,
         loading_index_doc: rawFlightRecord.loading_index_doc,
         weight_report_doc: rawFlightRecord.weight_report_doc,
         report_date: rawFlightRecord.report_date,
         aircraft_reg: rawFlightRecord.aircraft_reg,
-        // Hapus 'as any' karena parseFloat sudah menerima string | number
         empty_weight: parseFloat(rawFlightRecord.empty_weight as string),
         empty_weight_index: parseFloat(
           rawFlightRecord.empty_weight_index as string
@@ -133,7 +146,7 @@ export default async function handler(
           ),
         })
       );
-      flightRecord.galley_details = galleyDetails;
+      flightRecord.galley_details = galleyDetails; // Assign ke flightRecord
 
       // Ambil dan parse Crew Details
       const rawCrewDetails = await query<CrewDetail>(
@@ -150,9 +163,9 @@ export default async function handler(
           index: parseFloat(item.index as unknown as string),
         })
       );
-      flightRecord.crew_details = crewDetails;
+      flightRecord.crew_details = crewDetails; // Assign ke flightRecord
 
-      res.status(200).json(flightRecord);
+      res.status(200).json(flightRecord); // Kirim flightRecord yang sudah lengkap
     } catch (error: unknown) {
       console.error("Error fetching flight record details:", error);
       if (error instanceof Error) {
@@ -165,7 +178,9 @@ export default async function handler(
           .json({ message: "Internal Server Error", error: String(error) });
       }
     }
-  } else if (req.method === "PUT") {
+  }
+  // --- PUT (Memperbarui detail laporan) ---
+  else if (req.method === "PUT") {
     const {
       loading_index_doc,
       weight_report_doc,
@@ -180,7 +195,7 @@ export default async function handler(
     }: UpdateFlightRecordPayload = req.body;
 
     try {
-      // Validasi dasar
+      // Validasi input dari request body
       if (
         !loading_index_doc ||
         !weight_report_doc ||
@@ -197,8 +212,7 @@ export default async function handler(
         });
       }
 
-      // Query untuk update data
-      // Gunakan RawFlightRecordFromDb untuk hasil RETURNING juga
+      // Jalankan query UPDATE
       const result = await query<RawFlightRecordFromDb>(
         `UPDATE flight_records SET
                     loading_index_doc = $1,
@@ -218,7 +232,7 @@ export default async function handler(
           loading_index_doc,
           weight_report_doc,
           report_date,
-          aircraft_reg || null,
+          aircraft_reg || null, // Kirim null jika aircraft_reg kosong
           empty_weight,
           empty_weight_index,
           dow_domestic,
@@ -235,15 +249,14 @@ export default async function handler(
           .json({ message: "Flight Record not found for update." });
       }
 
+      // Parse data yang sudah diupdate kembali ke tipe FlightRecordDetail
       const updatedRecordRaw = result[0];
-      // Parse data numerik yang dikembalikan ke tipe FlightRecordDetail
       const parsedUpdatedRecord: FlightRecordDetail = {
         id: updatedRecordRaw.id,
         loading_index_doc: updatedRecordRaw.loading_index_doc,
         weight_report_doc: updatedRecordRaw.weight_report_doc,
         report_date: updatedRecordRaw.report_date,
         aircraft_reg: updatedRecordRaw.aircraft_reg,
-        // Hapus 'as any'
         empty_weight: parseFloat(updatedRecordRaw.empty_weight as string),
         empty_weight_index: parseFloat(
           updatedRecordRaw.empty_weight_index as string
@@ -256,21 +269,20 @@ export default async function handler(
         doi_international: parseFloat(
           updatedRecordRaw.doi_international as string
         ),
-        galley_details: [], // Data detail tidak diupdate di sini
-        crew_details: [], // Data detail tidak diupdate di sini
+        galley_details: [], // Data detail tidak diupdate di sini, biarkan kosong
+        crew_details: [], // Data detail tidak diupdate di sini, biarkan kosong
       };
 
-      res.status(200).json(parsedUpdatedRecord);
+      res.status(200).json(parsedUpdatedRecord); // Kirim record yang sudah di-parse
     } catch (error: unknown) {
       console.error("Error updating flight record:", error);
       if (error instanceof Error) {
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          (error as { code?: string }).code === "23505"
-        ) {
-          // PostgreSQL unique violation error code
+        // Tangani error unique violation jika loading_index_doc adalah UNIQUE
+        interface PgError extends Error {
+          code?: string;
+        }
+        if ((error as PgError).code === "23505") {
+          // Kode error PostgreSQL untuk unique_violation
           return res.status(409).json({
             message:
               "Another report with this Loading Index Doc already exists.",
@@ -285,8 +297,42 @@ export default async function handler(
           .json({ message: "Internal Server Error", error: String(error) });
       }
     }
-  } else {
-    res.setHeader("Allow", ["GET", "PUT"]); // Perbarui header Allow
+  }
+  // --- DELETE (Menghapus laporan) ---
+  else if (req.method === "DELETE") {
+    try {
+      // Jalankan query DELETE
+      const result = await query(
+        "DELETE FROM flight_records WHERE id = $1 RETURNING id;", // Mengembalikan ID yang dihapus
+        [id]
+      );
+
+      if (result.length === 0) {
+        return res
+          .status(404)
+          .json({ message: "Flight Record not found for deletion." });
+      }
+
+      res
+        .status(200)
+        .json({ message: `Flight Record with ID ${id} deleted successfully.` }); // Beri respons sukses
+    } catch (error: unknown) {
+      console.error("Error deleting flight record:", error);
+      if (error instanceof Error) {
+        res
+          .status(500)
+          .json({ message: "Internal Server Error", error: error.message });
+      } else {
+        res
+          .status(500)
+          .json({ message: "Internal Server Error", error: String(error) });
+      }
+    }
+  }
+  // --- Method Tidak Diizinkan ---
+  else {
+    // Jika method HTTP selain GET, PUT, atau DELETE, kirim respons 405 Method Not Allowed
+    res.setHeader("Allow", ["GET", "PUT", "DELETE"]);
     res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 }
